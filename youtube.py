@@ -1,7 +1,7 @@
 import os.path
 import argparse
 import time
-from configparser import SafeConfigParser
+from configparser import ConfigParser
 from datetime import datetime
 from oauth2client.client import flow_from_clientsecrets
 from googleapiclient.discovery import build
@@ -11,20 +11,16 @@ from oauth2client.tools import run_flow
 import httplib2
 
 def create_youtube_service(config):
-    youtube_read_write_scope = "https://www.googleapis.com/auth/youtube"
-    youtube_api_service_name = "youtube"
-    youtube_api_version = "v3"
     client_secrets_file = get_script_dir() + "client_secrets.json"
     missing_secrets_message = "Error: {0} is missing".format(
         client_secrets_file
     )
-    redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
 
     flow = flow_from_clientsecrets(
         client_secrets_file,
         message=missing_secrets_message,
-        scope=youtube_read_write_scope,
-        redirect_uri=redirect_uri
+        scope=config['youtube_read_write_scope'],
+        redirect_uri=config['redirect_uri']
     )
 
     storage = Storage(get_script_dir() + "oauth2.json")
@@ -37,12 +33,11 @@ def create_youtube_service(config):
             parents=[oauth2client.tools.argparser],
         )
         flags = parser.parse_args()
-
         credentials = run_flow(flow, storage, flags)
 
     return build(
-        youtube_api_service_name,
-        youtube_api_version,
+        config['youtube_api_service_name'],
+        config['youtube_api_version'],
         developerKey=config['api_key'],
         http=credentials.authorize(httplib2.Http())
     )
@@ -79,26 +74,28 @@ def add_video_to_playlist(youtube, playlist_id, video_id):
         fields="snippet"
     ).execute()
 
-
 def load_config_values():
     config_path = get_script_dir() + 'settings.cfg'
     section_account_name = 'accounts'
     section_playlist_name = 'playlist'
+    section_youtube_name = 'youtube'
 
     if not os.path.exists(config_path):
         print ("Error: No config file found.")
         exit()
 
-    config = SafeConfigParser()
+    config = ConfigParser()
     config.read(config_path)
 
-    config_values = {
+    return {
         'api_key': config.get(section_account_name, 'api_key'),
         'title': config.get(section_playlist_name, 'title'),
         'description': config.get(section_playlist_name, 'description'),
+        'youtube_api_service_name': config.get(section_youtube_name, 'youtube_api_service_name'),
+        'youtube_read_write_scope': config.get(section_youtube_name, 'youtube_read_write_scope'),
+        'youtube_api_version': config.get(section_youtube_name, 'youtube_api_version'),
+        'redirect_uri': config.get(section_youtube_name, 'redirect_uri'),
     }
-
-    return config_values
 
 def get_script_dir():
     return os.path.dirname(os.path.realpath(__file__)) + '/'
@@ -106,6 +103,7 @@ def get_script_dir():
 def read_songs_from_txt_file(file_name):
     lineList = [line.rstrip('\n') for line in open(file_name)]
     urls = []
+
     for line in lineList:
         if line.startswith('Url:'):
             parts = line.split('=')
@@ -123,7 +121,6 @@ def main():
     config = load_config_values()
     youtube = create_youtube_service(config)
     create_playlist_from_txt(youtube, config['title'], config['description'])
-
 
 if __name__ == '__main__':
     main()
