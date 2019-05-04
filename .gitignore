@@ -104,3 +104,4 @@ venv.bak/
 .mypy_cache/
 client_secrets.json
 settings.cfg
+oauth2.json
